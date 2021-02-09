@@ -5,7 +5,9 @@ go 1.15
 require (
 	github.com/googleapis/gnostic v0.5.4 // indirect
 	github.com/hashicorp/vault/api v1.0.4
+	github.com/rs/zerolog v1.20.0
 	github.com/spf13/pflag v1.0.5
+	github.com/spf13/viper v1.7.1 // indirect
 	k8s.io/api v0.20.2
 	k8s.io/apimachinery v0.20.2
 	k8s.io/client-go v11.0.0+incompatible

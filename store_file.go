@@ -7,13 +7,18 @@ import (
 	vaultapi "github.com/hashicorp/vault/api"
 )
 
-const StoreFile = "file"
+const SaveFile = "file"
 
-func storeFile(response *vaultapi.InitResponse) error {
+func saveFile(response *vaultapi.InitResponse) (string, error) {
 	initJSON, err := json.Marshal(response)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return ioutil.WriteFile(*flagFilePath, initJSON, 0644)
+	err = ioutil.WriteFile(*flagFilePath, initJSON, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return *flagFilePath, nil
 }

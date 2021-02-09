@@ -1,0 +1,216 @@
+#-------------------------------------------------------------------------------
+# vault-parent - serves as the transit engine provider
+#-------------------------------------------------------------------------------
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: vault-parent
+  name: vault-parent
+spec:
+  ports:
+  - name: http
+    port: 8200
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: vault-parent
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vault-parent
+  name: vault-parent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault-parent
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: vault-parent
+    spec:
+      containers:
+      - image: vault
+        name: vault
+        resources: {}
+        command: ["vault", "server", "-dev"]
+        env:
+        - name: VAULT_DEV_LISTEN_ADDRESS
+          value: 0.0.0.0:8200
+        - name: VAULT_DEV_ROOT_TOKEN_ID
+          value: test
+        - name: VAULT_ADDR
+          value: http://127.0.0.1:8200
+        ports:
+        - name: http
+          containerPort: 8200
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-parent-provision
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - image: vault
+        terminationMessagePolicy: "FallbackToLogsOnError"
+        imagePullPolicy: IfNotPresent
+        name: vault
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          vault secrets enable transit
+          vault write --force transit/keys/autounseal
+        env:
+        - name: VAULT_ADDR
+          value: http://vault-parent:8200
+        - name: VAULT_TOKEN
+          value: test
+#-------------------------------------------------------------------------------
+# vault-child - calls the parent's transit engine to auto-unseal
+#-------------------------------------------------------------------------------
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-child-config
+data:
+  server.hcl: |
+    disable_mlock = true
+
+    listener "tcp" {
+      address     = "[::]:8200"
+      tls_disable = true
+    }
+
+    storage "inmem" {}
+
+    seal "transit" {
+      address         = "http://vault-parent:8200"
+      token           = "test"
+      disable_renewal = "true"
+      key_name        = "autounseal"
+      mount_path      = "transit/"
+      tls_skip_verify = true
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: vault-child
+  name: vault-child
+spec:
+  ports:
+  - name: http
+    port: 8200
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: vault-child
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vault-child
+  name: vault-child
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault-child
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: vault-child
+    spec:
+      volumes:
+        - name: vault-config
+          configMap:
+            name: vault-child-config
+      containers:
+      - image: vault
+        name: vault
+        resources: {}
+        command: ["vault", "server", "-config=/vault-config/server.hcl"]
+        env:
+        - name: VAULT_DEV_LISTEN_ADDRESS
+          value: 0.0.0.0:8200
+        - name: VAULT_DEV_ROOT_TOKEN_ID
+          value: test
+        ports:
+        - name: http
+          containerPort: 8200
+        volumeMounts:
+          - mountPath: /vault-config
+            name: vault-config
+---
+#-------------------------------------------------------------------------------
+# vault-init - initializes vault-child and saves the result in a k8s secret
+#-------------------------------------------------------------------------------
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-init
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-init
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vault-init
+subjects:
+- kind: ServiceAccount
+  name: vault-init
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-init
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-init
+spec:
+  template:
+    spec:
+      serviceAccountName: vault-init
+      automountServiceAccountToken: true
+      restartPolicy: OnFailure
+      containers:
+      - image: ghcr.io/pbar1/vault-init
+        terminationMessagePolicy: "FallbackToLogsOnError"
+        imagePullPolicy: IfNotPresent
+        name: vault-init
+        command:
+          - vault-init
+          - --save=kube-secret
+          - --log-format=standard
+          - --log-level=debug
+        env:
+          - name: VAULT_ADDR
+            value: http://vault-child:8200

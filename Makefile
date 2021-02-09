@@ -7,12 +7,12 @@ LDFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
 IMAGE   := ghcr.io/pbar1/$(BIN)
 
 build: clean
-	GOOS=linux   GOARCH=arm64 go build -o bin/$(BIN)_linux_arm64  $(LDFLAGS) main.go
-	GOOS=linux   GOARCH=amd64 go build -o bin/$(BIN)_linux_amd64  $(LDFLAGS) main.go
-	GOOS=darwin  GOARCH=amd64 go build -o bin/$(BIN)_darwin_amd64 $(LDFLAGS) main.go
+	GOOS=linux   GOARCH=arm64 go build -o bin/$(BIN)_linux_arm64  $(LDFLAGS) .
+	GOOS=linux   GOARCH=amd64 go build -o bin/$(BIN)_linux_amd64  $(LDFLAGS) .
+	GOOS=darwin  GOARCH=amd64 go build -o bin/$(BIN)_darwin_amd64 $(LDFLAGS) .
 	du -sh bin/*
 
-image: build
+image:
 	docker build . -t $(IMAGE):$(VERSION) -t $(IMAGE):latest
 
 image-push: image

@@ -1,0 +1,11 @@
+{
+  "keys": [],
+  "keys_base64": [],
+  "recovery_keys": [
+    "test"
+  ],
+  "recovery_keys_base64": [
+    "test"
+  ],
+  "root_token": "test"
+}

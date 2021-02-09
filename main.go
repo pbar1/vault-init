@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,14 +11,23 @@ import (
 )
 
 var (
-	version                 = "unknown"
-	flagVersion             = flag.BoolP("version", "v", false, "Print version information")
-	flagTimeout             = flag.Duration("timeout", 10*time.Minute, "Time to wait before failing the Vault init process")
-	flagRecoveryShares      = flag.Int("recovery-shares", 1, "Recovery shares")
-	flagRecoveryThreshold   = flag.Int("recovery-threshold", 1, "Recovery threshold")
-	flagResultStore         = flag.String("result-store", "kube-secret", "Where to store the Vault init result. One of: kube-secret|file")
-	flagKubeSecretName      = flag.String("kube-secret-name", "vault-init", "Name of the Kubernetes secret to store Vault init result")
-	flagKubeSecretNamespace = flag.String("kube-secret-namespace", "", "Namespace to create the Kubernetes secret in. Defaults to the current namespace.")
+	version = "unknown"
+
+	flagVersion               = flag.BoolP("version", "v", false, "Print version information")
+	flagTimeout               = flag.Duration("timeout", 10*time.Minute, "Time to wait before failing the Vault init process")
+	flagRecoveryShares        = flag.Int("recovery-shares", 1, "Recovery shares")
+	flagRecoveryThreshold     = flag.Int("recovery-threshold", 1, "Recovery threshold")
+	flagStoreType             = flag.StringP("store-type", "t", "file", "Where to store the Vault init result. One of: kube-secret|file")
+	flagFilePath              = flag.String("file-path", "vault-init.json", "Path on disk to store the Vault init result")
+	flagKubeSecretName        = flag.String("kube-secret-name", "vault-init", "Name of the Kubernetes secret to store Vault init result")
+	flagKubeSecretNamespace   = flag.String("kube-secret-namespace", "", "Namespace to create the Kubernetes secret in. Defaults to the current namespace.")
+	flagKubeSecretLabels      = flag.StringToString("kube-secret-labels", nil, "Labels to add to the Kubernetes secret")
+	flagKubeSecretAnnotations = flag.StringToString("kube-secret-annotations", nil, "Labels to add to the Kubernetes secret")
+
+	storeFuncs = map[string]func(*vaultapi.InitResponse) error{
+		StoreFile:       storeFile,
+		StoreKubeSecret: storeKubeSecret,
+	}
 )
 
 func main() {
@@ -27,11 +35,17 @@ func main() {
 
 	if *flagVersion {
 		fmt.Println(version)
+		os.Exit(0)
+	}
+
+	storeFunc, exists := storeFuncs[*flagStoreType]
+	if !exists {
+		log.Fatalf("unsupported result store: %s\n", *flagStoreType)
 	}
 
 	vault, err := vaultapi.NewClient(vaultapi.DefaultConfig())
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("unable to create vault client: %v\n", err)
 	}
 
 	// loop until timeout, checking init status every 10 seconds
@@ -52,11 +66,16 @@ func main() {
 		if err != nil {
 			log.Printf("error during vault init operation: %v\n", err)
 		}
-		initJSON, err := json.Marshal(initResp)
-		if err != nil {
-			log.Printf("warning: unable to marshal init response to json: %v\n", err)
+		log.Println("vault initialization successful")
+		if err := storeFunc(initResp); err != nil && *flagStoreType != StoreFile {
+			log.Printf("warning: store-type=%s failed: %v\n", *flagStoreType, err)
+			log.Printf("falling back to store-type=file %s\n", *flagFilePath)
+			if err := storeFile(initResp); err != nil {
+				log.Printf("fallback store-type=file %s failed: %v\n", *flagFilePath, err)
+				log.Fatalln("init results unable to be stored: vault has been initialized, but root token and keys have been lost permanently")
+			}
 		}
-		fmt.Println(string(initJSON))
+		log.Println("vault init results stored successfully")
 		os.Exit(0)
 	}
 

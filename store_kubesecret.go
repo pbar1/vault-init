@@ -1,3 +1,7 @@
+// Copyright (c) 2021 Pierce Bartine. All rights reserved.
+// Use of this source code is governed by the MIT License that can be found in
+// the LICENSE file.
+
 package main
 
 import (
@@ -37,8 +41,9 @@ func saveKubeSecret(response *vaultapi.InitResponse) (string, error) {
 		if err != nil {
 			log.Warn().Err(err).Msg("unable to read namespace, falling back to default")
 			ns = "default"
+		} else {
+			ns = string(nsBytes)
 		}
-		ns = string(nsBytes)
 	}
 	log.Info().Str("namespace", ns).Msg("using namespace")
 
@@ -72,6 +77,7 @@ func saveKubeSecret(response *vaultapi.InitResponse) (string, error) {
 
 // newKubeClient creates a Kubernetes API client from a kubeconfig file. If no file is passed, falls back to inClusterConfig.
 func newKubeClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
+	// use inclusterconfig
 	if kubeconfigPath == "" {
 		config, err := rest.InClusterConfig()
 		if err != nil {
@@ -82,13 +88,14 @@ func newKubeClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
 			return nil, err
 		}
 		return clientset, nil
-	} else {
-		config, err := clientcmd.BuildConfigFromKubeconfigGetter("", func() (*api.Config, error) {
-			return clientcmd.LoadFromFile(kubeconfigPath)
-		})
-		if err != nil {
-			return nil, err
-		}
-		return kubernetes.NewForConfig(config)
 	}
+
+	// load kubeconfig from file
+	config, err := clientcmd.BuildConfigFromKubeconfigGetter("", func() (*api.Config, error) {
+		return clientcmd.LoadFromFile(kubeconfigPath)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return kubernetes.NewForConfig(config)
 }

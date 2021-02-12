@@ -1,23 +1,39 @@
-export CGO_ENABLED     := 0
+export BIN             := $(shell basename $(PWD))
+export VERSION         := $(shell git describe --tags --always --dirty)
 export DOCKER_BUILDKIT := 1
 
-BIN     := $(shell basename $(PWD))
-VERSION := $(shell git describe --tags --always --dirty)
-LDFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
-IMAGE   := ghcr.io/pbar1/$(BIN)
+SOURCE      := httos://github.com/pbar1/$(BIN)
+IMAGE_REPO  := ghcr.io/pbar1
+IMAGE_NAME  := $(IMAGE_REPO)/$(BIN)
+BUILD_IMAGE := golang:1
 
-build: clean
-	GOOS=linux   GOARCH=arm64 go build -o bin/$(BIN)_linux_arm64  $(LDFLAGS) .
-	GOOS=linux   GOARCH=amd64 go build -o bin/$(BIN)_linux_amd64  $(LDFLAGS) .
-	GOOS=darwin  GOARCH=amd64 go build -o bin/$(BIN)_darwin_amd64 $(LDFLAGS) .
-	du -sh bin/*
+build: build-docker
 
-image:
-	docker build . -t $(IMAGE):$(VERSION) -t $(IMAGE):latest
+build-native: clean
+	bash scripts/build.sh
+
+build-docker: clean
+	docker run                   \
+		--rm --interactive --tty   \
+		--workdir="/src"           \
+		--volume="$(PWD):/src"     \
+		--env="BIN=$(BIN)"         \
+		--env="VERSION=$(VERSION)" \
+		$(BUILD_IMAGE)             \
+		bash scripts/build.sh
+
+image: build
+	cat build/Dockerfile.release.in | sed "s|BIN|$(BIN)|g" > build/Dockerfile.release.out
+	docker build .                                      \
+	--file=build/Dockerfile.release.out                 \
+	--build-arg="BIN=$(BIN)"                            \
+	--label="org.opencontainers.image.source=$(SOURCE)" \
+	--tag=$(IMAGE_NAME):$(VERSION)                      \
+	--tag=$(IMAGE_NAME):latest
 
 image-push: image
-	docker push $(IMAGE):$(VERSION)
-	docker push $(IMAGE):latest
+	docker push $(IMAGE_NAME):$(VERSION)
+	docker push $(IMAGE_NAME):latest
 
 clean:
 	rm -rf bin

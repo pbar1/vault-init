@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 set -o errexit -o pipefail -o nounset -o xtrace
 
+NATIVEONLY=${NATIVEONLY:-false}
+
 targets=(
   #  "linux/386"
   "linux/amd64"
-  #  "linux/arm"
-  #  "linux/arm64"
+  "linux/arm"
+  "linux/arm64"
   #  "freebsd/386"
-  #  "freebsd/amd64"
+  "freebsd/amd64"
   #  "freebsd/arm"
   #  "freebsd/arm64"
   "darwin/amd64"
   #  "darwin/arm64"
   #  "windows/386"
-  #  "windows/amd64"
+  "windows/amd64"
 )
 
 echo "" >pidfile
@@ -22,6 +24,11 @@ for target in "${targets[@]}"; do
   os=$(cut -d '/' -f 1 <<<"${target}")
   arch=$(cut -d '/' -f 2 <<<"${target}")
   suffix=$([ "${os}" == "windows" ] && echo ".exe" || echo "")
+
+  # skip all targets but the current platform
+  if [[ ${NATIVEONLY} == true && ! ($os == $(go env GOOS) && $arch == $(go env GOARCH)) ]]; then
+    continue
+  fi
 
   GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build \
     -mod vendor \

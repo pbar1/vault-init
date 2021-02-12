@@ -7,10 +7,12 @@ IMAGE_REPO  := ghcr.io/pbar1
 IMAGE_NAME  := $(IMAGE_REPO)/$(BIN)
 BUILD_IMAGE := golang:1
 
-build: build-docker
+build: build-native
+
+build-release: build-docker
 
 build-native: clean
-	bash scripts/build.sh
+	NATIVEONLY=true bash scripts/build.sh
 
 build-docker: clean
 	docker run                   \
@@ -22,7 +24,7 @@ build-docker: clean
 		$(BUILD_IMAGE)             \
 		bash scripts/build.sh
 
-image: build
+image: build-release
 	cat build/Dockerfile.release.in | sed "s|BIN|$(BIN)|g" > build/Dockerfile.release.out
 	docker build .                                      \
 	--file=build/Dockerfile.release.out                 \
@@ -34,6 +36,9 @@ image: build
 image-push: image
 	docker push $(IMAGE_NAME):$(VERSION)
 	docker push $(IMAGE_NAME):latest
+
+version:
+	@echo $(VERSION)
 
 clean:
 	rm -rf bin

@@ -19,3 +19,6 @@ bin/
 
 # Rendered Dockerfiles
 build/Dockerfile.*.out
+
+# PID file for build jobs
+pidfile

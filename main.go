@@ -86,6 +86,7 @@ func main() {
 			os.Exit(0)
 		}
 		log.Info().Msg("vault is not initialized")
+		// TODO: allow the other init parameters
 		log.Info().Int("recoveryShares", *flagRecoveryShares).Int("recoveryThreshold", *flagRecoveryThreshold).Msg("initializing vault")
 		initResp, err := vault.Sys().Init(&vaultapi.InitRequest{
 			RecoveryShares:    *flagRecoveryShares,
@@ -96,6 +97,8 @@ func main() {
 			continue
 		}
 		log.Info().Msg("vault init succeeded")
+		// TODO: allow saving the result in multiple locations simultaneously
+		// TODO: retry the save until a timeout, to avoid losing the init result due to transient failure
 		location, err := storeFunc(initResp)
 		if err != nil {
 			log.Warn().Err(err).Str("save", *flagSave).Msg("save failed, falling back to file to avoid data loss")

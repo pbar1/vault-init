@@ -1,4 +1,4 @@
-# vault-init
+owrnfoetnf# vault-init
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/pbar1/vault-init)](https://goreportcard.com/report/github.com/pbar1/vault-init)
 

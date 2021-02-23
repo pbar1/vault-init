@@ -5,21 +5,17 @@
 package main
 
 import (
-	"encoding/json"
 	"io/ioutil"
 
-	vaultapi "github.com/hashicorp/vault/api"
+	flag "github.com/spf13/pflag"
 )
 
-const SaveFile = "file"
+const saveMethodFile = "file"
 
-func saveFile(response *vaultapi.InitResponse) (string, error) {
-	initJSON, err := json.Marshal(response)
-	if err != nil {
-		return "", err
-	}
+var flagFilePath = flag.String("file-path", "vault-init.json", "Path on disk to save the Vault init result")
 
-	err = ioutil.WriteFile(*flagFilePath, initJSON, 0644)
+func saveFnFile(r *initResult) (string, error) {
+	err := ioutil.WriteFile(*flagFilePath, r.ResponseJSON, 0644)
 	if err != nil {
 		return "", err
 	}

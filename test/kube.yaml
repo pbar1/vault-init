@@ -211,6 +211,8 @@ spec:
           - --save=kube-secret
           - --log-format=standard
           - --log-level=debug
+          - --kube-secret-labels="my-label-1=foo,my-label-2=bar"
+          - --kube-secret-annotations="example.com/my-anno-1=foo,example.com/my-anno-2=bar"
         env:
           - name: VAULT_ADDR
             value: http://vault-child:8200

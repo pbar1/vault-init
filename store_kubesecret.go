@@ -6,13 +6,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strings"
 
-	vaultapi "github.com/hashicorp/vault/api"
 	"github.com/rs/zerolog/log"
+	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -21,14 +20,17 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-const SaveKubeSecret = "kube-secret"
+const saveMethodKubeSecret = "kube-secret"
 
-func saveKubeSecret(response *vaultapi.InitResponse) (string, error) {
-	initJSON, err := json.Marshal(response)
-	if err != nil {
-		return "", err
-	}
+var (
+	flagKubeconfig            = flag.String("kubeconfig", "", "Path to Kubeconfig to use when saving the Kubernetes secret. If unset, will attempt to use in-cluster config.")
+	flagKubeSecretName        = flag.String("kube-secret-name", "vault-init", "Name of the Kubernetes secret to save Vault init result")
+	flagKubeSecretNamespace   = flag.String("kube-secret-namespace", "", "Namespace to create the Kubernetes secret in. Defaults to the current namespace.")
+	flagKubeSecretLabels      = flag.StringToString("kube-secret-labels", nil, "Labels to add to the Kubernetes secret")
+	flagKubeSecretAnnotations = flag.StringToString("kube-secret-annotations", nil, "Labels to add to the Kubernetes secret")
+)
 
+func saveFnKubeSecret(r *initResult) (string, error) {
 	// create kube api client and attempt to set namespace
 	kube, err := newKubeClient(*flagKubeconfig)
 	if err != nil {
@@ -64,8 +66,8 @@ func saveKubeSecret(response *vaultapi.InitResponse) (string, error) {
 	secret, err := kube.CoreV1().Secrets(ns).Create(context.TODO(), &corev1.Secret{
 		ObjectMeta: metadata,
 		Data: map[string][]byte{
-			"vault-init.json": initJSON,
-			"root_token":      []byte(response.RootToken),
+			"vault-init.json": r.ResponseJSON,
+			"root_token":      []byte(r.RootToken),
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -75,9 +77,9 @@ func saveKubeSecret(response *vaultapi.InitResponse) (string, error) {
 	return fmt.Sprintf("%s/%s", secret.Namespace, secret.Name), nil
 }
 
-// newKubeClient creates a Kubernetes API client from a kubeconfig file. If no file is passed, falls back to inClusterConfig.
+// newKubeClient creates a Kubernetes API client from a kubeconfig file. If no file is passed, falls back to in-cluster config.
 func newKubeClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
-	// use inclusterconfig
+	// attempt to use in-cluster config
 	if kubeconfigPath == "" {
 		config, err := rest.InClusterConfig()
 		if err != nil {

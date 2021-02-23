@@ -3,6 +3,7 @@ module github.com/pbar1/vault-init
 go 1.15
 
 require (
+	github.com/aws/aws-sdk-go v1.37.14
 	github.com/googleapis/gnostic v0.5.4 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/rs/zerolog v1.20.0

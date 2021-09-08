@@ -17,6 +17,8 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+type SaveFunc func(*vaultapi.InitResponse) (string, error)
+
 var (
 	version = "unknown"
 
@@ -33,8 +35,9 @@ var (
 	flagKubeSecretNamespace   = flag.String("kube-secret-namespace", "", "Namespace to create the Kubernetes secret in. Defaults to the current namespace.")
 	flagKubeSecretLabels      = flag.StringToString("kube-secret-labels", nil, "Labels to add to the Kubernetes secret")
 	flagKubeSecretAnnotations = flag.StringToString("kube-secret-annotations", nil, "Labels to add to the Kubernetes secret")
+	flagRotate                = flag.Bool("rotate", false, "Rotates recovery keys and root token instead of initializing Vault")
 
-	saveFuncs = map[string]func(*vaultapi.InitResponse) (string, error){
+	saveFuncs = map[string]SaveFunc{
 		SaveFile:       saveFile,
 		SaveKubeSecret: saveKubeSecret,
 	}
@@ -60,7 +63,7 @@ func main() {
 	log.Logger = log.With().Caller().Logger()
 
 	// lookup result store function
-	storeFunc, exists := saveFuncs[*flagSave]
+	saveFunc, exists := saveFuncs[*flagSave]
 	if !exists {
 		log.Fatal().Str("save", *flagSave).Msg("unsupported save type")
 	}
@@ -73,7 +76,16 @@ func main() {
 	}
 	log.Info().Str("vaultAddr", vault.Address()).Msg("configured vault api client")
 
-	// loop until timeout, checking init status every 10 seconds
+	if *flagRotate {
+		rotate(vault, saveFunc)
+	} else {
+		initialize(vault, saveFunc)
+	}
+}
+
+// initialize checks Vault's init status every 10s and performs the init if possible. Result is saved to the configured
+// save backend, with fallback to the `file` backend to avoid data loss.
+func initialize(vault *vaultapi.Client, saveFunc SaveFunc) {
 	for start := time.Now(); time.Now().Before(start.Add(*flagTimeout)); time.Sleep(10 * time.Second) {
 		log.Info().Msg("checking vault init status")
 		initialized, err := vault.Sys().InitStatus()
@@ -99,7 +111,7 @@ func main() {
 		log.Info().Msg("vault init succeeded")
 		// TODO: allow saving the result in multiple locations simultaneously
 		// TODO: retry the save until a timeout, to avoid losing the init result due to transient failure
-		location, err := storeFunc(initResp)
+		location, err := saveFunc(initResp)
 		if err != nil {
 			log.Warn().Err(err).Str("save", *flagSave).Msg("save failed, falling back to file to avoid data loss")
 			*flagSave = "file"
@@ -112,4 +124,10 @@ func main() {
 		os.Exit(0)
 	}
 	log.Fatal().Dur("timeout", *flagTimeout).Msg("unable to initialize vault within timeout")
+}
+
+// rotate re-keys Vault's recovery keys, creates a new root token and persists it using the configured save backend, and
+// revokes the old root token.
+func rotate(vault *vaultapi.Client, saveFunc SaveFunc) {
+
 }

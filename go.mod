@@ -3,10 +3,15 @@ module github.com/pbar1/vault-init
 go 1.15
 
 require (
+	github.com/go-ldap/ldap v3.0.2+incompatible // indirect
 	github.com/googleapis/gnostic v0.5.4 // indirect
-	github.com/hashicorp/vault/api v1.0.4
+	github.com/hashicorp/vault v1.8.2
+	github.com/hashicorp/vault/api v1.1.2-0.20210713235431-1fc8af4c041f
+	github.com/hashicorp/vault/sdk v0.2.2-0.20210825150427-9b1f4d486f5d
+	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d // indirect
 	github.com/rs/zerolog v1.20.0
 	github.com/spf13/pflag v1.0.5
+	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	k8s.io/api v0.20.2
 	k8s.io/apimachinery v0.20.2
 	k8s.io/client-go v11.0.0+incompatible

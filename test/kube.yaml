@@ -76,6 +76,7 @@ spec:
           value: http://vault-parent:8200
         - name: VAULT_TOKEN
           value: test
+
 #-------------------------------------------------------------------------------
 # vault-child - calls the parent's transit engine to auto-unseal
 #-------------------------------------------------------------------------------
@@ -157,7 +158,7 @@ spec:
         volumeMounts:
           - mountPath: /vault-config
             name: vault-config
----
+
 #-------------------------------------------------------------------------------
 # vault-init - initializes vault-child and saves the result in a k8s secret
 #-------------------------------------------------------------------------------
@@ -172,7 +173,7 @@ rules:
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["create", "get"]
+  verbs: ["create", "update", "get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -202,15 +203,53 @@ spec:
       automountServiceAccountToken: true
       restartPolicy: OnFailure
       containers:
-      - image: ghcr.io/pbar1/vault-init
+      - image: ghcr.io/pbar1/vault-init:latest
         terminationMessagePolicy: "FallbackToLogsOnError"
         imagePullPolicy: IfNotPresent
         name: vault-init
-        command:
-          - vault-init
-          - --save=kube-secret
-          - --log-format=standard
-          - --log-level=debug
+        args:
+        - --save=kube-secret
+        - --log-format=standard
+        - --log-level=trace
         env:
-          - name: VAULT_ADDR
-            value: http://vault-child:8200
+        - name: VAULT_ADDR
+          value: http://vault-child:8200
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: vault-init-rotate
+spec:
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: vault-init
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          containers:
+          - image: ghcr.io/pbar1/vault-init:latest
+            terminationMessagePolicy: "FallbackToLogsOnError"
+            imagePullPolicy: IfNotPresent
+            name: vault-init
+            args:
+            - --save=kube-secret
+            - --log-format=standard
+            - --log-level=trace
+            - --rotate
+            - --overwrite
+            env:
+            - name: VAULT_ADDR
+              value: http://vault-child:8200
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: root_token
+                  name: vault-init
+            - name: VAULT_INIT_JSON
+              valueFrom:
+                secretKeyRef:
+                  key: vault-init.json
+                  name: vault-init
+  schedule: "* * * * *"

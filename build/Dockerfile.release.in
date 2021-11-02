@@ -1,8 +1,0 @@
-FROM golang:1 as prep
-ADD bin /src/bin
-RUN export os=$(go env GOOS) arch=$(go env GOARCH) \
-    && cp "/src/bin/BIN_${os}_${arch}" "/BIN"
-
-FROM gcr.io/distroless/static:latest
-COPY --from=prep "/BIN" "/BIN"
-ENTRYPOINT ["/BIN"]

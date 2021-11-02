@@ -210,21 +210,57 @@ spec:
       automountServiceAccountToken: true
       restartPolicy: OnFailure
       containers:
-      - image: ghcr.io/pbar1/vault-init:1.1.0-1-gb9ab35a-dirty
-        terminationMessagePolicy: "FallbackToLogsOnError"
+      - image: ghcr.io/pbar1/vault-init:local
+        terminationMessagePolicy: FallbackToLogsOnError
         imagePullPolicy: Never
         name: vault-init
         command:
-          - /vault-init
-          - --save=vaultkv
-          - --log-format=standard
-          - --log-level=trace
-          - --vaultkv-secret-path=test-vault-init
-          - --vaultkv-mount-path=kv2
+        - /vault-init
+        - --save=vaultkv
+        - --log-format=standard
+        - --log-level=trace
+        - --vaultkv-secret-path=test-vault-init
+        - --vaultkv-mount-path=kv2
         env:
-          - name: VAULT_ADDR
-            value: http://vault-child:8200
-          - name: VAULTINIT_VAULTKV_VAULT_ADDR
-            value: http://vault-parent:8200
-          - name: VAULTINIT_VAULTKV_VAULT_TOKEN
-            value: test
+        - name: VAULT_ADDR
+          value: http://vault-child:8200
+        - name: VAULTINIT_VAULTKV_VAULT_ADDR
+          value: http://vault-parent:8200
+        - name: VAULTINIT_VAULTKV_VAULT_TOKEN
+          value: test
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: vault-init-rotate
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: vault-init
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          containers:
+          - image: ghcr.io/pbar1/vault-init:local
+            terminationMessagePolicy: FallbackToLogsOnError
+            imagePullPolicy: Never
+            name: vault-init
+            command:
+            - /vault-init
+            - --save=vaultkv
+            - --log-format=standard
+            - --log-level=trace
+            - --vaultkv-secret-path=test-vault-init
+            - --vaultkv-mount-path=kv2
+            - --rotate
+            env:
+            - name: VAULT_ADDR
+              value: http://vault-child:8200
+            - name: VAULTINIT_VAULTKV_VAULT_ADDR
+              value: http://vault-parent:8200
+            - name: VAULTINIT_VAULTKV_VAULT_TOKEN
+              value: test

@@ -118,8 +118,9 @@ tasks:
     - bin:build:linux-amd64
     cmds:
     - docker build --tag={{.IMAGE}}:{{.VERSION}} .
-    status:
-    - docker inspect --type=image {{.IMAGE}}:{{.VERSION}}
+    - docker tag {{.IMAGE}}:{{.VERSION}} {{.IMAGE}}:local
+#    status:
+#    - docker inspect --type=image {{.IMAGE}}:{{.VERSION}}
 
   image:push:
     desc: Push container image to remote repository
@@ -135,7 +136,7 @@ tasks:
     deps:
     - image:build
     cmds:
-    - k3d image import {{.IMAGE}}:{{.VERSION}}
+    - k3d image import {{.IMAGE}}:local
 
   site:build:
     desc: Build documentation website

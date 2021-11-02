@@ -126,7 +126,7 @@ func main() {
 		if err := vi.RotateRoot(); err != nil {
 			log.Fatal().Err(err).Msg("unable to rotate root token")
 		}
-		log.Info().Msg("successfully rotate root token")
+		log.Info().Msg("successfully rotated root token")
 	} else {
 		if err := vi.Init(*flagTimeout); err != nil {
 			log.Fatal().Err(err).Dur("timeout", *flagTimeout).Msg("unable to initialize vault within timeout duration")

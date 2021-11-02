@@ -69,7 +69,7 @@ func (m *VaultKVSaveMethod) Save(response *vaultapi.InitResponse) (string, error
 		l.Error().Err(err).Msg("failed to json marshal vault init response")
 		return "", err
 	}
-	l.Trace().Interface("response", response).Msg("json marshalled vault init response")
+	l.Trace().Str("vaultAddr", m.VaultClient.Address()).Interface("response", response).Msg("json marshalled vault init response")
 
 	fullPath := path.Join(m.MountPath, "data", m.SecretPath)
 	if _, err := m.VaultClient.Logical().Write(fullPath, map[string]interface{}{
@@ -81,7 +81,7 @@ func (m *VaultKVSaveMethod) Save(response *vaultapi.InitResponse) (string, error
 		l.Error().Err(err).Msg("failed to write vault kv secret")
 		return "", err
 	}
-	l.Trace().Bytes("initJSON", initJSON).Msg("wrote vault kv secret contents")
+	l.Trace().Str("vaultAddr", m.VaultClient.Address()).Bytes("initJSON", initJSON).Msg("wrote vault kv secret contents")
 
 	return fullPath, nil
 }
@@ -95,7 +95,7 @@ func (m *VaultKVSaveMethod) Load() (*vaultapi.InitResponse, error) {
 	if err != nil {
 		l.Error().Err(err).Msg("failed to read vault kv secret")
 	}
-	l.Trace().Interface("secret", secret).Msg("loaded secret")
+	l.Trace().Str("vaultAddr", m.VaultClient.Address()).Interface("secret", secret).Msg("loaded secret")
 	secretDataIface, found := secret.Data["data"]
 	if !found {
 		l.Error().Msg("failed to find 'data' key in kv secret response")
@@ -112,7 +112,7 @@ func (m *VaultKVSaveMethod) Load() (*vaultapi.InitResponse, error) {
 		l.Error().Msg("failed to find vault init response key in vault kv secret")
 		return nil, err
 	}
-	l.Trace().Interface("initJSON", initJSON).Msg("read vault kv secret contents")
+	l.Trace().Str("vaultAddr", m.VaultClient.Address()).Interface("initJSON", initJSON).Msg("read vault kv secret contents")
 
 	initJSONStr, ok := initJSON.(string)
 	if !ok {
@@ -125,7 +125,7 @@ func (m *VaultKVSaveMethod) Load() (*vaultapi.InitResponse, error) {
 		l.Error().Err(err).Msg("failed to json unmarshal vault init response")
 		return nil, err
 	}
-	l.Trace().Interface("response", response).Msg("json unmarshalled vault init response")
+	l.Trace().Str("vaultAddr", m.VaultClient.Address()).Interface("response", response).Msg("json unmarshalled vault init response")
 
 	return response, nil
 }

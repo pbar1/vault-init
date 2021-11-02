@@ -325,6 +325,10 @@ func (i *VaultInitializer) RotateRoot() error {
 		return err
 	}
 
+	// WARNING: This is the Vault token that will be REVOKED! It must be set here first,
+	// as the init response will be overwritten with the newly minted token.
+	i.vault.SetToken(initResp.RootToken)
+
 	otp, err := base62.Random(26)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating otp")
@@ -374,6 +378,7 @@ func (i *VaultInitializer) RotateRoot() error {
 	}
 	log.Info().Str("location", location).Msg("save succeeded")
 
+	// Revoking token that was set via SetToken above
 	if err := i.vault.Auth().Token().RevokeSelf(""); err != nil {
 		log.Error().Err(err).Msg("error revoking current root token")
 		return err

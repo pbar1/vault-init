@@ -1,0 +1,16 @@
+[package]
+name = "vault-init"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = {version = "*", features = ["derive", "env"]}
+anyhow = "*"
+reqwest = {version = "*", features = ["blocking", "json"]}
+serde = {version = "*", features = ["derive"]}
+serde_json = "*"
+url = "*"
+tracing = "*"
+tracing-subscriber = "*"

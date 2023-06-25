@@ -1,15 +1,23 @@
 #![warn(clippy::pedantic)]
+#![allow(clippy::struct_excessive_bools)]
+#![allow(clippy::module_name_repetitions)]
+
+mod k8s;
+mod vault;
 
 use clap::Parser;
-use serde::Deserialize;
-use serde::Serialize;
 use tracing::error;
 use tracing::info;
-use tracing::trace;
 
-/// Initialize an instance of HashiCorp Vault and persist the keys
-#[derive(Parser, Debug)]
-struct Args {
+use crate::k8s::read_kube_secret;
+use crate::k8s::write_kube_secret;
+use crate::vault::StartInitRequest;
+use crate::vault::UnsealRequest;
+use crate::vault::VaultClient;
+
+/// Initialize an instance of `HashiCorp` Vault and persist the keys
+#[derive(Parser, Debug, Clone)]
+pub struct Args {
     /// Address of the Vault server expressed as a URL and port
     #[clap(long, env = "VAULT_ADDR", default_value = "http://127.0.0.1:8200")]
     vault_addr: url::Url,
@@ -60,205 +68,94 @@ struct Args {
     recovery_pgp_keys: Option<Vec<String>>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct ReadInitStatusResponse {
-    pub initialized: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct StartInitRequest {
-    pgp_keys: Option<Vec<String>>,
-    root_token_pgp_key: Option<String>,
-    secret_shares: u8,
-    secret_threshold: u8,
-    stored_shares: Option<u8>,
-    recovery_shares: Option<u8>,
-    recovery_threshold: Option<u8>,
-    recovery_pgp_keys: Option<Vec<String>>,
-}
-
-impl From<Args> for StartInitRequest {
-    fn from(args: Args) -> Self {
-        Self {
-            pgp_keys: args.pgp_keys,
-            root_token_pgp_key: args.root_token_pgp_key,
-            secret_shares: args.secret_shares,
-            secret_threshold: args.secret_threshold,
-            stored_shares: args.stored_shares,
-            recovery_shares: args.recovery_shares,
-            recovery_threshold: args.recovery_threshold,
-            recovery_pgp_keys: args.recovery_pgp_keys,
-        }
-    }
-}
-
-/// An object including the (possibly encrypted, if `pgp_keys` was provided)
-/// root keys, base 64 encoded root keys and initial root token
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct StartInitResponse {
-    pub keys: Vec<String>,
-    pub keys_base64: Vec<String>,
-    pub root_token: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct SealStatusResponse {
-    pub r#type: String,
-    pub initialized: bool,
-    pub sealed: bool,
-    pub t: i64,
-    pub n: i64,
-    pub progress: i64,
-    pub nonce: String,
-    pub version: String,
-    pub build_date: String,
-    pub migration: bool,
-    pub cluster_name: Option<String>,
-    pub cluster_id: Option<String>,
-    pub recovery_seal: bool,
-    pub storage_type: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct UnsealRequest {
-    key: Option<String>,
-    reset: bool,
-    migrate: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct UnsealResponse {
-    pub sealed: bool,
-    pub t: i64,
-    pub n: i64,
-    pub progress: i64,
-    pub version: String,
-    pub cluster_name: Option<String>,
-    pub cluster_id: Option<String>,
-}
-
-struct VaultClient {
-    addr: url::Url,
-    http: reqwest::blocking::Client,
-}
-
-impl VaultClient {
-    fn new(addr: url::Url) -> Self {
-        let http = reqwest::blocking::Client::new();
-        Self { addr, http }
-    }
-
-    fn read_init_status(&self) -> anyhow::Result<ReadInitStatusResponse> {
-        let endpoint = self.addr.join("v1/sys/init")?;
-
-        let response: ReadInitStatusResponse =
-            self.http.get(endpoint).send()?.error_for_status()?.json()?;
-
-        Ok(response)
-    }
-
-    fn start_init(&self, request: &StartInitRequest) -> anyhow::Result<StartInitResponse> {
-        let endpoint = self.addr.join("v1/sys/init")?;
-
-        let response: StartInitResponse = self
-            .http
-            .post(endpoint)
-            .json(request)
-            .send()?
-            .error_for_status()?
-            .json()?;
-
-        Ok(response)
-    }
-
-    fn get_seal_status(&self) -> anyhow::Result<SealStatusResponse> {
-        let endpoint = self.addr.join("v1/sys/seal-status")?;
-
-        let response: SealStatusResponse =
-            self.http.get(endpoint).send()?.error_for_status()?.json()?;
-
-        Ok(response)
-    }
-
-    fn submit_unseal_key(&self, request: &UnsealRequest) -> anyhow::Result<UnsealResponse> {
-        let endpoint = self.addr.join("v1/sys/unseal")?;
-
-        let response: UnsealResponse = self
-            .http
-            .post(endpoint)
-            .json(request)
-            .send()?
-            .error_for_status()?
-            .json()?;
-
-        Ok(response)
-    }
-}
-
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-
     setup_logging();
-
+    let vault = VaultClient::new(args.vault_addr.clone());
     info!("Started vault-init");
 
-    let vault = VaultClient::new(args.vault_addr.clone());
+    // Ensure init ------------------------------------------------------------
 
     info!("Checking initializtion status");
-    let init_status = vault.read_init_status().map_err(|err| {
+    let init_status = vault.read_init_status().await.map_err(|err| {
         error!("Failed checking initializtion status");
         err
     })?;
-    trace!(?init_status);
-
-    if init_status.initialized {
-        info!("Vault is already initialized");
-        return Ok(());
+    if !init_status.initialized {
+        info!("Vault is uninitialized");
+        init_and_write_kube_secret(&vault, args.clone()).await?;
     }
-    info!("Vault is not yet initialized");
+    info!("Vault is already initialized");
 
+    // Ensure unseal ----------------------------------------------------------
+
+    info!("Checking seal status");
+    let seal_status = vault.get_seal_status().await.map_err(|err| {
+        error!("Failed checking seal status");
+        err
+    })?;
+    if seal_status.sealed {
+        info!("Vault is sealed");
+        read_kube_secret_and_unseal(&vault).await?;
+    }
+    info!("Vault is already unsealed");
+
+    Ok(())
+}
+
+async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::Result<()> {
     info!("Performing initialization");
     let init_request = StartInitRequest::from(args);
-    let init_response = vault.start_init(&init_request).map_err(|err| {
+    let init_response = vault.start_init(&init_request).await.map_err(|err| {
         error!("Failed performing initialization");
         err
     })?;
     info!("Successfully initialized Vault");
-    trace!(?init_response);
 
-    info!("Checking seal status");
-    let seal_status = vault.get_seal_status().map_err(|err| {
-        error!("Failed checking seal status");
+    info!("Writing init response to Kubernetes secret");
+    write_kube_secret("vault-init", &init_response)
+        .await
+        .map_err(|err| {
+            error!("Failed writing init response to Kubernetes secret");
+            err
+        })?;
+    info!("Successfully wrote init response to Kubernetes secret");
+
+    Ok(())
+}
+
+async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> {
+    info!("Reading init response from Kubernetes secret");
+    let init_respose = read_kube_secret("vault-init").await.map_err(|err| {
+        error!("Failed reading init response from Kubernetes secret");
         err
     })?;
-    trace!(?seal_status);
+    info!("Successfully read init response from Kubernetes secret");
 
-    if !seal_status.sealed {
-        info!("Vault is already unsealed");
-        return Ok(());
+    info!("Starting unseal key submission process");
+    for (i, key) in init_respose.keys.iter().enumerate() {
+        info!("Submitting unseal key #{i}");
+        let unseal_request = UnsealRequest {
+            key: Some(key.clone()),
+            reset: false,
+            migrate: false,
+        };
+
+        // TODO: Consider allowing continue instead of early return failure
+        let unseal_response = vault
+            .submit_unseal_key(&unseal_request)
+            .await
+            .map_err(|err| {
+                error!("Failed submitting unseal key #{i}");
+                err
+            })?;
+        if !unseal_response.sealed {
+            info!("Successfully unsealed Vault");
+            return Ok(());
+        }
     }
-    info!("Vault is sealed");
 
-    // FIXME: Clowntown
-    info!("Performing unseal");
-    let unseal_request = UnsealRequest {
-        key: Some(init_response.keys.get(0).unwrap().to_owned()),
-        reset: false,
-        migrate: false,
-    };
-    let unseal_response = vault.submit_unseal_key(&unseal_request).map_err(|err| {
-        error!("Failed submitting unseal key");
-        err
-    })?;
-    trace!(?unseal_response);
-
-    if !unseal_response.sealed {
-        info!("Successfully unsealed Vault");
-        return Ok(());
-    }
-    // TODO: Continue the unseal flow
-
-    error!("Unable to completely unseal Vault");
     Err(anyhow::anyhow!("Unable to completely unseal Vault"))
 }
 

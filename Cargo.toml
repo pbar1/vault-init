@@ -8,9 +8,13 @@ edition = "2021"
 [dependencies]
 clap = {version = "*", features = ["derive", "env"]}
 anyhow = "*"
-reqwest = {version = "*", features = ["blocking", "json"]}
+reqwest = {version = "*", default-features= false, features = [ "json", "rustls-tls"]}
 serde = {version = "*", features = ["derive"]}
 serde_json = "*"
 url = "*"
 tracing = "*"
 tracing-subscriber = "*"
+kube = {version = "*", default-features = false, features = ["client", "rustls-tls"]}
+k8s-openapi = {version = "*", features = ["v1_26"]}
+tokio = {version = "*", features = ["full"]}
+data-encoding = "*"

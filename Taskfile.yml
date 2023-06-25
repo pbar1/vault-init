@@ -1,7 +1,6 @@
 version: '3'
 
 env:
-  CGO_ENABLED: '0'
   DOCKER_BUILDKIT: '1'
 
 # WARNING: Order matters here - ie, LDFLAGS depends on VERSION and must come after it
@@ -119,8 +118,8 @@ tasks:
     cmds:
     - docker build --tag={{.IMAGE}}:{{.VERSION}} .
     - docker tag {{.IMAGE}}:{{.VERSION}} {{.IMAGE}}:local
-#    status:
-#    - docker inspect --type=image {{.IMAGE}}:{{.VERSION}}
+    #    status:
+    #    - docker inspect --type=image {{.IMAGE}}:{{.VERSION}}
 
   image:push:
     desc: Push container image to remote repository

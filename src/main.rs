@@ -73,69 +73,73 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     setup_logging();
     let vault = VaultClient::new(args.vault_addr.clone());
-    info!("Started vault-init");
+    info!(phase = "start", "Started process");
 
     // Ensure init ------------------------------------------------------------
 
-    info!("Checking initializtion status");
+    info!(phase = "init", "Checking status");
     let init_status = vault.read_init_status().await.map_err(|err| {
-        error!("Failed checking initializtion status");
+        error!(phase = "init", "Failed checking status");
         err
     })?;
     if !init_status.initialized {
-        info!("Vault is uninitialized");
+        info!(phase = "init", "Vault is uninitialized");
         init_and_write_kube_secret(&vault, args.clone()).await?;
     }
-    info!("Vault is already initialized");
+    info!(phase = "init", "Vault is already initialized");
 
     // Ensure unseal ----------------------------------------------------------
 
-    info!("Checking seal status");
+    info!(phase = "unseal", "Checking status");
     let seal_status = vault.get_seal_status().await.map_err(|err| {
-        error!("Failed checking seal status");
+        error!(phase = "unseal", "Failed checking status");
         err
     })?;
     if seal_status.sealed {
-        info!("Vault is sealed");
+        info!(phase = "unseal", "Vault is sealed");
         read_kube_secret_and_unseal(&vault).await?;
+    } else {
+        info!(phase = "unseal", "Vault is already unsealed");
     }
-    info!("Vault is already unsealed");
 
     Ok(())
 }
 
 async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::Result<()> {
-    info!("Performing initialization");
+    info!(phase = "init", "Performing initialization");
     let init_request = StartInitRequest::from(args);
     let init_response = vault.start_init(&init_request).await.map_err(|err| {
-        error!("Failed performing initialization");
+        error!(phase = "init", "Failed performing initialization");
         err
     })?;
-    info!("Successfully initialized Vault");
+    info!(phase = "init", "Successfully initialized Vault");
 
-    info!("Writing init response to Kubernetes secret");
+    info!(phase = "init", "Writing init data to K8s secret");
     write_kube_secret("vault-init", &init_response)
         .await
         .map_err(|err| {
-            error!("Failed writing init response to Kubernetes secret");
+            error!(phase = "init", "Failed writing init data to K8s secret");
             err
         })?;
-    info!("Successfully wrote init response to Kubernetes secret");
+    info!(phase = "init", "Successfully wrote init data to K8s secret");
 
     Ok(())
 }
 
 async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> {
-    info!("Reading init response from Kubernetes secret");
+    info!(phase = "unseal", "Reading init data from K8s secret");
     let init_respose = read_kube_secret("vault-init").await.map_err(|err| {
-        error!("Failed reading init response from Kubernetes secret");
+        error!(phase = "unseal", "Failed reading init data from K8s secret");
         err
     })?;
-    info!("Successfully read init response from Kubernetes secret");
+    info!(
+        phase = "unseal",
+        "Successfully read init data from K8s secret"
+    );
 
-    info!("Starting unseal key submission process");
+    info!(phase = "unseal", "Starting key submission process");
     for (i, key) in init_respose.keys.iter().enumerate() {
-        info!("Submitting unseal key #{i}");
+        info!(phase = "unseal", "Submitting key #{i}");
         let unseal_request = UnsealRequest {
             key: Some(key.clone()),
             reset: false,
@@ -147,11 +151,11 @@ async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> 
             .submit_unseal_key(&unseal_request)
             .await
             .map_err(|err| {
-                error!("Failed submitting unseal key #{i}");
+                error!(phase = "unseal", "Failed submitting key #{i}");
                 err
             })?;
         if !unseal_response.sealed {
-            info!("Successfully unsealed Vault");
+            info!(phase = "unseal", "Successfully unsealed Vault");
             return Ok(());
         }
     }

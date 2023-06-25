@@ -1,9 +1,8 @@
-FROM alpine:latest AS build
-ARG TARGETARCH
-WORKDIR /
-COPY bin .
-RUN mv vault-init_linux_$TARGETARCH vault-init
+FROM rust:alpine as build
+WORKDIR /usr/src/vault-init
+COPY . .
+RUN cargo install --path .
 
-FROM alpine:latest
-COPY --from=build /vault-init /
-CMD ["/vault-init"]
+FROM alpine
+COPY --from=build /usr/local/cargo/bin/vault-init /usr/local/bin/vault-init
+CMD ["vault-init"]

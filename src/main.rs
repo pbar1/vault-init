@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::error;
 use tracing::info;
+use tracing::trace;
 
 /// Initialize an instance of HashiCorp Vault and persist the keys
 #[derive(Parser, Debug)]
@@ -208,6 +209,7 @@ fn main() -> anyhow::Result<()> {
         error!("Failed checking initializtion status");
         err
     })?;
+    trace!(?init_status);
 
     if init_status.initialized {
         info!("Vault is already initialized");
@@ -222,12 +224,14 @@ fn main() -> anyhow::Result<()> {
         err
     })?;
     info!("Successfully initialized Vault");
+    trace!(?init_response);
 
     info!("Checking seal status");
     let seal_status = vault.get_seal_status().map_err(|err| {
         error!("Failed checking seal status");
         err
     })?;
+    trace!(?seal_status);
 
     if !seal_status.sealed {
         info!("Vault is already unsealed");
@@ -246,13 +250,16 @@ fn main() -> anyhow::Result<()> {
         error!("Failed submitting unseal key");
         err
     })?;
+    trace!(?unseal_response);
 
     if !unseal_response.sealed {
         info!("Successfully unsealed Vault");
+        return Ok(());
     }
     // TODO: Continue the unseal flow
 
-    Ok(())
+    error!("Unable to completely unseal Vault");
+    Err(anyhow::anyhow!("Unable to completely unseal Vault"))
 }
 
 fn setup_logging() {

@@ -1,0 +1,49 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-init
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "update", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-init
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vault-init
+subjects:
+- kind: ServiceAccount
+  name: vault-init
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-init
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-init
+spec:
+  template:
+    spec:
+      serviceAccountName: vault-init
+      automountServiceAccountToken: true
+      restartPolicy: OnFailure
+      containers:
+      - image: ghcr.io/pbar1/vault-init:latest
+        terminationMessagePolicy: FallbackToLogsOnError
+        imagePullPolicy: Always
+        name: vault-init
+        # args:
+        # -
+        env:
+        - name: VAULT_ADDR
+          value: http://vault:8200

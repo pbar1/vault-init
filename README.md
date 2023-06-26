@@ -1,6 +1,6 @@
 # vault-init
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/pbar1/vault-init)](https://goreportcard.com/report/github.com/pbar1/vault-init)
+[![Build](https://github.com/pbar1/vault-init/actions/workflows/build.yml/badge.svg)](https://github.com/pbar1/vault-init/actions/workflows/build.yml)
 
 Initializes HashiCorp Vault and saves the root token and keys in a provider of your choice.
 
@@ -10,52 +10,34 @@ docker pull ghcr.io/pbar1/vault-init
 
 ## Usage
 
-[Vault environment variables][1] (such as `VAULT_ADDR`, `VAULT_CACERT`, etc) are
-recognized.
-
 ```
-Usage of vault-init:
-      --file-path string                         Path on disk to save the Vault init result (default "vault-init.json")
-      --kube-secret-annotations stringToString   Labels to add to the Kubernetes secret (default [])
-      --kube-secret-labels stringToString        Labels to add to the Kubernetes secret (default [])
-      --kube-secret-name string                  Name of the Kubernetes secret to save Vault init result (default "vault-init")
-      --kube-secret-namespace string             Namespace to create the Kubernetes secret in. Defaults to the current namespace.
-      --kubeconfig string                        Path to Kubeconfig to use when saving the Kubernetes secret. If unset, will use inClusterConfig.
-      --log-format string                        Log output format (default "json")
-      --log-level string                         Log level (default "info")
-      --recovery-shares int                      Recovery shares (default 1)
-      --recovery-threshold int                   Recovery threshold (default 1)
-  -s, --save string                              How to save the Vault init result. One of: file|kube-secret (default "file")
-      --timeout duration                         Time to wait before failing the Vault init process (default 10m0s)
-  -v, --version                                  Print version information
+Initialize an instance of `HashiCorp` Vault and persist the keys
+
+Usage: vault-init [OPTIONS]
+
+Options:
+      --vault-addr <VAULT_ADDR>
+          Address of the Vault server expressed as a URL and port [env: VAULT_ADDR=] [default: http://127.0.0.1:8200]
+      --pgp-keys <PGP_KEYS>
+          Specifies an array of PGP public keys used to encrypt the output unseal keys. Ordering is preserved. The keys must be base64-encoded from their original binary representation. The size of this array must be the same as `secret_shares`
+      --root-token-pgp-key <ROOT_TOKEN_PGP_KEY>
+          Specifies a PGP public key used to encrypt the initial root token. The key must be base64-encoded from its original binary representations
+      --secret-shares <SECRET_SHARES>
+          Specifies the number of shares to split the root key into [default: 1]
+      --secret-threshold <SECRET_THRESHOLD>
+          Specifies the number of shares required to reconstruct the root key. This must be less than or equal `secret_shares` [default: 1]
+      --stored-shares <STORED_SHARES>
+          Specifies the number of shares that should be encrypted by the HSM and stored for auto-unsealing. Currently must be the same as `secret_shares`
+      --recovery-shares <RECOVERY_SHARES>
+          Specifies the number of shares to split the recovery key into. This is only available when using Auto Unseal
+      --recovery-threshold <RECOVERY_THRESHOLD>
+          Specifies the number of shares required to reconstruct the recovery key. This must be less than or equal to recovery_shares. This is only available when using Auto Unseal
+      --recovery-pgp-keys <RECOVERY_PGP_KEYS>
+          Specifies an array of PGP public keys used to encrypt the output recovery keys. Ordering is preserved. The keys must be base64-encoded from their original binary representation. The size of this array must be the same as `recovery_shares`. This is only available when using Auto Unseal
+  -h, --help
+          Print help
 ```
 
-### Save to a file
-
-By default, vault-init saves to a file in the current directory called
-`vault-init.json`. This can be overridden with a flag.
-
-```sh
-vault-init --file-path="/vault-init.json"
-```
-
-### Save to Kubernetes secret
-
-By default, vault-init will save to a Kubernetes secret called `vault-init`.
-This can be overridden with a flag. If a secret with this name already exists,
-vault-init will _not_ overwrite it, but rather save to a new secret with the
-name as a prefix. If running in Kubernetes, the secret will be created in the
-same namespace as the pod; the namespace may also be specified with a flag. If
-neither of these are found, the secret will attempt to be created in the default
-namespace. Labels and annotations may be added.
-
-```sh
-vault-init                                              \
-  --save=kube-secret                                    \
-  --kubeconfig="${HOME}/.kube/config"                   \
-  --kube-secret-name=my-secret                          \
-  --kube-secret-namespace=my-namespace                  \
-  --kube-secret-labels="my-label-1=foo,my-label-2=bar"
-```
+<!-- Links -->
 
 [1]: https://www.vaultproject.io/docs/commands#environment-variables

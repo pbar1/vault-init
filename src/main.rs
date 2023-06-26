@@ -90,8 +90,9 @@ async fn main() -> anyhow::Result<()> {
     if !init_status.initialized {
         info!(phase = "init", "Vault is uninitialized");
         init_and_write_kube_secret(&vault, args.clone()).await?;
+    } else {
+        info!(phase = "init", "Vault is already initialized");
     }
-    info!(phase = "init", "Vault is already initialized");
 
     // Ensure unseal ----------------------------------------------------------
 
@@ -151,14 +152,10 @@ async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> 
             migrate: false,
         };
 
-        // TODO: Consider allowing continue instead of early return failure
-        let unseal_response = vault
-            .submit_unseal_key(&unseal_request)
-            .await
-            .map_err(|err| {
-                error!(phase = "unseal", "Failed submitting key #{i}");
-                err
-            })?;
+        let Ok(unseal_response) = vault.submit_unseal_key(&unseal_request).await else {
+            error!(phase = "unseal", "Failed submitting key #{i}");
+            continue;
+        };
         if !unseal_response.sealed {
             info!(phase = "unseal", "Successfully unsealed Vault");
             return Ok(());

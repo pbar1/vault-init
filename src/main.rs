@@ -16,61 +16,70 @@ use crate::vault::StartInitRequest;
 use crate::vault::UnsealRequest;
 use crate::vault::VaultClient;
 
-/// Initialize an instance of `HashiCorp` Vault and persist the keys
+#[allow(clippy::doc_markdown)]
+/// Initialize an instance of HashiCorp Vault and persist the keys
 #[derive(Parser, Debug, Clone)]
+#[clap(author, version, about)]
 pub struct Args {
-    /// Address of the Vault server expressed as a URL and port
+    /// Address of the Vault server expressed as a URL and port.
     #[clap(long, env = "VAULT_ADDR", default_value = "http://127.0.0.1:8200")]
     vault_addr: url::Url,
 
-    /// Specifies an array of PGP public keys used to encrypt the output unseal
-    /// keys. Ordering is preserved. The keys must be base64-encoded from their
+    /// Level directive for stdout logging.
+    #[clap(long, env = "RUST_LOG", default_value = "info")]
+    log_level: String,
+
+    /// Array of PGP public keys used to encrypt the output unseal keys.
+    ///
+    /// Ordering is preserved. The keys must be base64-encoded from their
     /// original binary representation. The size of this array must be the same
-    /// as `secret_shares`
-    #[clap(long)]
+    /// as `secret_shares`.
+    #[clap(long, hide = true)]
     pgp_keys: Option<Vec<String>>,
 
-    /// Specifies a PGP public key used to encrypt the initial root token. The
-    /// key must be base64-encoded from its original binary representations
-    #[clap(long)]
+    /// PGP public key used to encrypt the initial root token.
+    ///
+    /// The key must be base64-encoded from its original binary representations.
+    #[clap(long, hide = true)]
     root_token_pgp_key: Option<String>,
 
-    /// Specifies the number of shares to split the root key into
+    /// Number of shares to split the root key into.
     #[clap(long, default_value_t = 1)]
     secret_shares: u8,
 
-    /// Specifies the number of shares required to reconstruct the root key.
-    /// This must be less than or equal `secret_shares`
+    /// Number of shares required to reconstruct the root key.
+    ///
+    /// This must be less than or equal `secret_shares`.
     #[clap(long, default_value_t = 1)]
     secret_threshold: u8,
 
-    /// Specifies the number of shares that should be encrypted by the HSM and
-    /// stored for auto-unsealing. Currently must be the same as `secret_shares`
+    /// Number of shares that should be encrypted by the HSM and stored for
+    /// auto-unsealing.
+    ///
+    /// Currently must be the same as `secret_shares`.
     #[clap(long)]
     stored_shares: Option<u8>,
 
-    /// Specifies the number of shares to split the recovery key into. This is
-    /// only available when using Auto Unseal
+    /// Number of shares to split the recovery key into.
+    ///
+    /// This is only available when using Auto Unseal.
     #[clap(long)]
     recovery_shares: Option<u8>,
 
-    /// Specifies the number of shares required to reconstruct the recovery key.
+    /// Number of shares required to reconstruct the recovery key.
+    ///
     /// This must be less than or equal to recovery_shares. This is only
-    /// available when using Auto Unseal
+    /// available when using Auto Unseal.
     #[clap(long)]
     recovery_threshold: Option<u8>,
 
-    /// Specifies an array of PGP public keys used to encrypt the output
-    /// recovery keys. Ordering is preserved. The keys must be base64-encoded
-    /// from their original binary representation. The size of this array must
-    /// be the same as `recovery_shares`. This is only available when using Auto
-    /// Unseal.
-    #[clap(long)]
+    /// Array of PGP public keys used to encrypt the output recovery keys.
+    ///
+    /// Ordering is preserved. The keys must be base64-encoded from their
+    /// original binary representation. The size of this array must be the same
+    /// as `recovery_shares`. This is only available when using Auto Unseal.
+    #[clap(long, hide = true)]
     recovery_pgp_keys: Option<Vec<String>>,
-
-    /// Level directive for stdout logging
-    #[clap(long, env = "RUST_LOG", default_value = "info")]
-    log_level: String,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -87,11 +96,11 @@ async fn main() -> anyhow::Result<()> {
         error!(phase = "init", "Failed checking status");
         err
     })?;
-    if !init_status.initialized {
+    if init_status.initialized {
+        info!(phase = "init", "Vault is already initialized");
+    } else {
         info!(phase = "init", "Vault is uninitialized");
         init_and_write_kube_secret(&vault, args.clone()).await?;
-    } else {
-        info!(phase = "init", "Vault is already initialized");
     }
 
     // Ensure unseal ----------------------------------------------------------
@@ -134,7 +143,7 @@ async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::
 
 async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> {
     info!(phase = "unseal", "Reading init data from K8s secret");
-    let init_respose = read_kube_secret("vault-init").await.map_err(|err| {
+    let init_response = read_kube_secret("vault-init").await.map_err(|err| {
         error!(phase = "unseal", "Failed reading init data from K8s secret");
         err
     })?;
@@ -144,7 +153,7 @@ async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> 
     );
 
     info!(phase = "unseal", "Starting key submission process");
-    for (i, key) in init_respose.keys.iter().enumerate() {
+    for (i, key) in init_response.keys.iter().enumerate() {
         info!(phase = "unseal", "Submitting key #{i}");
         let unseal_request = UnsealRequest {
             key: Some(key.clone()),

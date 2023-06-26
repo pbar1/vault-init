@@ -20,7 +20,10 @@ bin/
 # Taskfile
 .task/
 
-
 # Added by cargo
 
 /target
+
+# Nix
+
+/result

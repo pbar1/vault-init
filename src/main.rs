@@ -8,6 +8,7 @@ mod vault;
 use clap::Parser;
 use tracing::error;
 use tracing::info;
+use tracing_subscriber::prelude::*;
 
 use crate::k8s::read_kube_secret;
 use crate::k8s::write_kube_secret;
@@ -66,12 +67,16 @@ pub struct Args {
     /// Unseal.
     #[clap(long)]
     recovery_pgp_keys: Option<Vec<String>>,
+
+    /// Level directive for stdout logging
+    #[clap(long, env = "RUST_LOG", default_value = "info")]
+    log_level: String,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    setup_logging();
+    setup_logging(&args.log_level)?;
     let vault = VaultClient::new(args.vault_addr.clone());
     info!(phase = "start", "Started process");
 
@@ -163,7 +168,15 @@ async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> 
     Err(anyhow::anyhow!("Unable to completely unseal Vault"))
 }
 
-fn setup_logging() {
-    let format = tracing_subscriber::fmt::format();
-    tracing_subscriber::fmt().event_format(format).init();
+fn setup_logging(log_level: &str) -> anyhow::Result<()> {
+    let fmt_filter = tracing_subscriber::filter::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .parse_lossy(log_level);
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(fmt_filter);
+
+    let subscriber = tracing_subscriber::Registry::default().with(fmt_layer);
+
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    Ok(())
 }

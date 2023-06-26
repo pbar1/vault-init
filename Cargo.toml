@@ -21,5 +21,7 @@ kube = { version = "*", default-features = false, features = [
   "rustls-tls",
 ] }
 k8s-openapi = { version = "*", features = ["v1_26"] }
-tokio = { version = "*", default-features = false, features = ["macros"] }
+tokio = { version = "*", default-features = false, features = ["macros", "fs"] }
 data-encoding = "*"
+hcl-rs = "*"
+async-trait = "*"

@@ -2,16 +2,21 @@
 #![allow(clippy::struct_excessive_bools)]
 #![allow(clippy::module_name_repetitions)]
 
-mod k8s;
+mod config;
+mod save;
 mod vault;
 
+use std::path::PathBuf;
+
 use clap::Parser;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing_subscriber::prelude::*;
 
-use crate::k8s::read_kube_secret;
-use crate::k8s::write_kube_secret;
+use crate::config::Config;
+use crate::save::Load;
+use crate::save::Save;
 use crate::vault::StartInitRequest;
 use crate::vault::UnsealRequest;
 use crate::vault::VaultClient;
@@ -28,6 +33,10 @@ pub struct Args {
     /// Level directive for stdout logging.
     #[clap(long, env = "RUST_LOG", default_value = "info")]
     log_level: String,
+
+    /// Config file.
+    #[clap(long, short)]
+    config: Option<PathBuf>,
 
     /// Array of PGP public keys used to encrypt the output unseal keys.
     ///
@@ -89,6 +98,13 @@ async fn main() -> anyhow::Result<()> {
     let vault = VaultClient::new(args.vault_addr.clone());
     info!(phase = "start", "Started process");
 
+    if let Some(config) = args.config.clone() {
+        debug!(phase = "start", ?config, "Reading config file");
+        let buf = tokio::fs::read(config).await?;
+        let config: Config = hcl::from_slice(&buf)?;
+        debug!(phase = "start", ?config, "Read config file");
+    }
+
     // Ensure init ------------------------------------------------------------
 
     info!(phase = "init", "Checking status");
@@ -120,6 +136,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: Allow other save methods
 async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::Result<()> {
     info!(phase = "init", "Performing initialization");
     let init_request = StartInitRequest::from(args);
@@ -130,20 +147,21 @@ async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::
     info!(phase = "init", "Successfully initialized Vault");
 
     info!(phase = "init", "Writing init data to K8s secret");
-    write_kube_secret("vault-init", &init_response)
-        .await
-        .map_err(|err| {
-            error!(phase = "init", "Failed writing init data to K8s secret");
-            err
-        })?;
+    let kube_secret = crate::save::KubeSecret::default();
+    kube_secret.save_init(&init_response).await.map_err(|err| {
+        error!(phase = "init", "Failed writing init data to K8s secret");
+        err
+    })?;
     info!(phase = "init", "Successfully wrote init data to K8s secret");
 
     Ok(())
 }
 
+// TODO: Allow other save methods
 async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> {
     info!(phase = "unseal", "Reading init data from K8s secret");
-    let init_response = read_kube_secret("vault-init").await.map_err(|err| {
+    let kube_secret = crate::save::KubeSecret::default();
+    let init_response = kube_secret.load_init().await.map_err(|err| {
         error!(phase = "unseal", "Failed reading init data from K8s secret");
         err
     })?;

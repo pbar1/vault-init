@@ -27,3 +27,5 @@ bin/
 # Nix
 
 /result
+
+.ignore

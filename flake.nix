@@ -18,6 +18,8 @@
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
         };
         defaultPackage = bin;
+
+        # TODO: https://github.com/mirkolenz/grpc-proxy/blob/main/flake.nix
         packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
           name = "ghcr.io/pbar1/vault-init";
           tag = "latest";

@@ -15,8 +15,6 @@ use tracing::info;
 use tracing_subscriber::prelude::*;
 
 use crate::config::Config;
-use crate::save::Load;
-use crate::save::Save;
 use crate::vault::StartInitRequest;
 use crate::vault::UnsealRequest;
 use crate::vault::VaultClient;
@@ -35,8 +33,8 @@ pub struct Args {
     log_level: String,
 
     /// Config file.
-    #[clap(long, short)]
-    config: Option<PathBuf>,
+    #[clap(long, short, default_value = "vault-init.hcl")]
+    config: PathBuf,
 
     /// Array of PGP public keys used to encrypt the output unseal keys.
     ///
@@ -98,12 +96,11 @@ async fn main() -> anyhow::Result<()> {
     let vault = VaultClient::new(args.vault_addr.clone());
     info!(phase = "start", "Started process");
 
-    if let Some(config) = args.config.clone() {
-        debug!(phase = "start", ?config, "Reading config file");
-        let buf = tokio::fs::read(config).await?;
-        let config: Config = hcl::from_slice(&buf)?;
-        debug!(phase = "start", ?config, "Read config file");
-    }
+    let config = args.config.clone();
+    debug!(phase = "start", ?config, "Reading config file");
+    let buf = tokio::fs::read(config).await?;
+    let config: Config = hcl::from_slice(&buf)?;
+    debug!(phase = "start", ?config, "Read config file");
 
     // Ensure init ------------------------------------------------------------
 
@@ -116,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
         info!(phase = "init", "Vault is already initialized");
     } else {
         info!(phase = "init", "Vault is uninitialized");
-        init_and_write_kube_secret(&vault, args.clone()).await?;
+        init_and_save(&vault, args.clone(), &config).await?;
     }
 
     // Ensure unseal ----------------------------------------------------------
@@ -128,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
     })?;
     if seal_status.sealed {
         info!(phase = "unseal", "Vault is sealed");
-        read_kube_secret_and_unseal(&vault).await?;
+        load_and_unseal(&vault, &config).await?;
     } else {
         info!(phase = "unseal", "Vault is already unsealed");
     }
@@ -136,8 +133,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: Allow other save methods
-async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::Result<()> {
+async fn init_and_save(vault: &VaultClient, args: Args, config: &Config) -> anyhow::Result<()> {
     info!(phase = "init", "Performing initialization");
     let init_request = StartInitRequest::from(args);
     let init_response = vault.start_init(&init_request).await.map_err(|err| {
@@ -146,28 +142,35 @@ async fn init_and_write_kube_secret(vault: &VaultClient, args: Args) -> anyhow::
     })?;
     info!(phase = "init", "Successfully initialized Vault");
 
-    info!(phase = "init", "Writing init data to K8s secret");
-    let kube_secret = crate::save::KubeSecret::default();
-    kube_secret.save_init(&init_response).await.map_err(|err| {
-        error!(phase = "init", "Failed writing init data to K8s secret");
-        err
-    })?;
-    info!(phase = "init", "Successfully wrote init data to K8s secret");
+    info!(phase = "init", "Writing init data to save methods");
+    config
+        .save_method
+        .save_init_all(&init_response)
+        .await
+        .map_err(|err| {
+            error!(phase = "init", "Failed writing init data to save methods");
+            err
+        })?;
+    info!(
+        phase = "init",
+        "Successfully wrote init data to save methods"
+    );
 
     Ok(())
 }
 
-// TODO: Allow other save methods
-async fn read_kube_secret_and_unseal(vault: &VaultClient) -> anyhow::Result<()> {
-    info!(phase = "unseal", "Reading init data from K8s secret");
-    let kube_secret = crate::save::KubeSecret::default();
-    let init_response = kube_secret.load_init().await.map_err(|err| {
-        error!(phase = "unseal", "Failed reading init data from K8s secret");
+async fn load_and_unseal(vault: &VaultClient, config: &Config) -> anyhow::Result<()> {
+    info!(phase = "unseal", "Reading init data from save methods");
+    let init_response = config.save_method.load_init_all().await.map_err(|err| {
+        error!(
+            phase = "unseal",
+            "Failed reading init data from save methods"
+        );
         err
     })?;
     info!(
         phase = "unseal",
-        "Successfully read init data from K8s secret"
+        "Successfully read init data from save methods"
     );
 
     info!(phase = "unseal", "Starting key submission process");

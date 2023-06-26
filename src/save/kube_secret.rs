@@ -6,6 +6,7 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use tracing::debug;
 
 use super::Load;
 use super::Save;
@@ -28,6 +29,8 @@ pub struct KubeSecret {
 #[async_trait::async_trait]
 impl Save for KubeSecret {
     async fn save_init(&self, data: &StartInitResponse) -> anyhow::Result<()> {
+        debug!(save_method = "kube_secret", "Saving init data");
+
         let client = kube::Client::try_default().await?;
 
         // FIXME: Allow setting namespace
@@ -60,6 +63,8 @@ impl Save for KubeSecret {
 #[async_trait::async_trait]
 impl Load for KubeSecret {
     async fn load_init(&self) -> anyhow::Result<StartInitResponse> {
+        debug!(save_method = "kube_secret", "Loading init data");
+
         let client = kube::Client::try_default().await?;
 
         let secrets: kube::Api<Secret> = kube::Api::default_namespaced(client);

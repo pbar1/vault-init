@@ -17,14 +17,17 @@
           buildInputs = [ cargo rustc rustfmt pre-commit rustPackages.clippy ];
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
         };
-        packages.dockerImage = pkgs.dockerTools.buildLayeredImage {
-          name = "vault-init";
-          tag = "beta";
+        defaultPackage = bin;
+        packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
+          name = "ghcr.io/pbar1/vault-init";
+          tag = "latest";
           contents = [ bin ];
           config = {
             Cmd = [ "${bin}/bin/vault-init" ];
+            Labels = {
+              "org.opencontainers.image.source" = "https://github.com/pbar1/vault-init";
+            };
           };
         };
-        defaultPackage = bin;
       });
 }

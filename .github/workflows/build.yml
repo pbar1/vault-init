@@ -18,4 +18,4 @@ jobs:
         name: pbar1
         authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-    - run: nix-build .#defaultPackage
+    - run: nix-build .

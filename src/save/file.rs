@@ -7,7 +7,7 @@ use tracing::warn;
 
 use super::Load;
 use super::Save;
-use crate::vault::StartInitResponse;
+use crate::vault::models::sys::init::StartInitResponse;
 
 const DEFAULT_PATH: &str = "vault-init.json";
 

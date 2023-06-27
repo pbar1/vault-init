@@ -4,7 +4,7 @@ mod kube_secret;
 pub use file::File;
 pub use kube_secret::KubeSecret;
 
-use crate::vault::StartInitResponse;
+use crate::vault::models::sys::init::StartInitResponse;
 
 #[async_trait::async_trait]
 pub trait Save {

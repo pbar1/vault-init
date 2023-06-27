@@ -15,8 +15,8 @@ use tracing::info;
 use tracing_subscriber::prelude::*;
 
 use crate::config::Config;
-use crate::vault::StartInitRequest;
-use crate::vault::UnsealRequest;
+use crate::vault::models::sys::init::StartInitRequest;
+use crate::vault::models::sys::unseal::UnsealRequest;
 use crate::vault::VaultClient;
 
 #[allow(clippy::doc_markdown)]

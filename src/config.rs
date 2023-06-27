@@ -5,7 +5,7 @@ use crate::save::File;
 use crate::save::KubeSecret;
 use crate::save::Load;
 use crate::save::Save;
-use crate::vault::StartInitResponse;
+use crate::vault::models::sys::init::StartInitResponse;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {

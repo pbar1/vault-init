@@ -12,7 +12,7 @@ use tracing::warn;
 
 use super::Load;
 use super::Save;
-use crate::vault::StartInitResponse;
+use crate::vault::models::sys::init::StartInitResponse;
 
 const DEFAULT_SECRET_NAME: &str = "vault-init";
 const DEFAULT_SECRET_KEY: &str = "init.json";

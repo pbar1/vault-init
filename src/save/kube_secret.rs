@@ -3,10 +3,12 @@ use std::collections::BTreeMap;
 use anyhow::Context;
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use kube::ResourceExt;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use tracing::debug;
+use tracing::warn;
 
 use super::Load;
 use super::Save;
@@ -25,25 +27,26 @@ pub struct KubeSecret {
     pub overwrite: Option<bool>,
 }
 
-// FIXME: Enforce overwrite setting
 #[async_trait::async_trait]
 impl Save for KubeSecret {
     async fn save_init(&self, data: &StartInitResponse) -> anyhow::Result<()> {
         debug!(save_method = "kube_secret", "Saving init data");
 
+        // Create K8s client
         let client = kube::Client::try_default().await?;
-
-        // FIXME: Allow setting namespace
-        let secrets: kube::Api<Secret> = kube::Api::default_namespaced(client);
+        let secrets: kube::Api<Secret> = match &self.namespace {
+            Some(ns) => kube::Api::namespaced(client, ns),
+            None => kube::Api::default_namespaced(client),
+        };
 
         let key = self.key.clone().unwrap_or(DEFAULT_SECRET_KEY.to_owned());
         let mut string_data: BTreeMap<String, String> = BTreeMap::new();
         string_data.insert(key, json!(data).to_string());
 
         let name = self.name.clone().unwrap_or(DEFAULT_SECRET_NAME.to_owned());
-        let secret = Secret {
+        let mut secret = Secret {
             metadata: ObjectMeta {
-                name: Some(name),
+                name: Some(name.clone()),
                 labels: self.labels.clone(),
                 annotations: self.annotations.clone(),
                 ..Default::default()
@@ -52,9 +55,27 @@ impl Save for KubeSecret {
             ..Default::default()
         };
 
-        secrets
-            .create(&kube::api::PostParams::default(), &secret)
-            .await?;
+        if let Ok(existing) = secrets.get(&name).await {
+            if !self.overwrite.unwrap_or(false) {
+                return Err(anyhow::anyhow!(
+                    "Kube secret already exists, but not configured to overwrite"
+                ));
+            }
+
+            warn!(
+                save_method = "kube_secret",
+                secret = name,
+                "Existing secret found, overwriting"
+            );
+            secret.metadata.resource_version = existing.resource_version();
+            secrets
+                .replace(&name, &kube::api::PostParams::default(), &secret)
+                .await?;
+        } else {
+            secrets
+                .create(&kube::api::PostParams::default(), &secret)
+                .await?;
+        }
 
         Ok(())
     }
@@ -66,8 +87,10 @@ impl Load for KubeSecret {
         debug!(save_method = "kube_secret", "Loading init data");
 
         let client = kube::Client::try_default().await?;
-
-        let secrets: kube::Api<Secret> = kube::Api::default_namespaced(client);
+        let secrets: kube::Api<Secret> = match &self.namespace {
+            Some(ns) => kube::Api::namespaced(client, ns),
+            None => kube::Api::default_namespaced(client),
+        };
 
         let name = self.name.clone().unwrap_or(DEFAULT_SECRET_NAME.to_owned());
         let secret = secrets.get(&name).await?;

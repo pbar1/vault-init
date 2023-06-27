@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
+use tracing::warn;
 
 use super::Load;
 use super::Save;
@@ -21,6 +22,22 @@ impl Save for File {
     async fn save_init(&self, data: &StartInitResponse) -> anyhow::Result<()> {
         debug!(save_method = "file", "Saving init data");
         let path = self.path.clone().unwrap_or(PathBuf::from(DEFAULT_PATH));
+
+        let metadata = tokio::fs::metadata(&path).await?;
+        if metadata.is_file() {
+            if !self.overwrite.unwrap_or(false) {
+                return Err(anyhow::anyhow!(
+                    "File already exists, but not configured to overwrite"
+                ));
+            }
+
+            warn!(
+                save_method = "file",
+                path = &path.to_string_lossy().to_string(),
+                "Existing secret found, overwriting"
+            );
+        }
+
         let contents = serde_json::to_vec(data)?;
         tokio::fs::write(path, &contents).await?;
         Ok(())

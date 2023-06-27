@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SealStatusResponse {
+pub struct GetSealStatusResponse {
     pub r#type: String,
     pub initialized: bool,
     pub sealed: bool,

@@ -46,10 +46,10 @@ impl VaultClient {
         Ok(response)
     }
 
-    pub async fn get_seal_status(&self) -> anyhow::Result<SealStatusResponse> {
+    pub async fn get_seal_status(&self) -> anyhow::Result<GetSealStatusResponse> {
         let endpoint = self.addr.join("v1/sys/seal-status")?;
 
-        let response: SealStatusResponse = self
+        let response: GetSealStatusResponse = self
             .http
             .get(endpoint)
             .send()
@@ -63,11 +63,11 @@ impl VaultClient {
 
     pub async fn submit_unseal_key(
         &self,
-        request: &UnsealRequest,
-    ) -> anyhow::Result<UnsealResponse> {
+        request: &PostUnsealRequest,
+    ) -> anyhow::Result<PostUnsealResponse> {
         let endpoint = self.addr.join("v1/sys/unseal")?;
 
-        let response: UnsealResponse = self
+        let response: PostUnsealResponse = self
             .http
             .post(endpoint)
             .json(request)

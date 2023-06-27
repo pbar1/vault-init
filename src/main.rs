@@ -16,7 +16,7 @@ use tracing_subscriber::prelude::*;
 
 use crate::config::Config;
 use crate::vault::models::sys::init::PostInitRequest;
-use crate::vault::models::sys::unseal::UnsealRequest;
+use crate::vault::models::sys::unseal::PostUnsealRequest;
 use crate::vault::VaultClient;
 
 #[allow(clippy::doc_markdown)]
@@ -176,7 +176,7 @@ async fn load_and_unseal(vault: &VaultClient, config: &Config) -> anyhow::Result
     info!(phase = "unseal", "Starting key submission process");
     for (i, key) in init_response.keys.iter().enumerate() {
         info!(phase = "unseal", "Submitting key #{i}");
-        let unseal_request = UnsealRequest {
+        let unseal_request = PostUnsealRequest {
             key: Some(key.clone()),
             reset: false,
             migrate: false,

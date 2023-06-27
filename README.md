@@ -10,6 +10,8 @@ docker pull ghcr.io/pbar1/vault-init
 
 ## Usage
 
+### CLI
+
 ```
 Initialize an instance of `HashiCorp` Vault and persist the keys
 
@@ -36,6 +38,27 @@ Options:
           Specifies an array of PGP public keys used to encrypt the output recovery keys. Ordering is preserved. The keys must be base64-encoded from their original binary representation. The size of this array must be the same as `recovery_shares`. This is only available when using Auto Unseal
   -h, --help
           Print help
+```
+
+### Config
+
+```hcl
+save_method "file" {
+  path      = "vault-init.json"
+  overwrite = true
+}
+
+save_method "kube_secret" {
+  name      = "vault-init"
+  key       = "init.json"
+  overwrite = true
+  labels = {
+    "foo" = "foo"
+  }
+  annotations = {
+    "example.com/baz" = "baz"
+  }
+}
 ```
 
 <!-- Links -->

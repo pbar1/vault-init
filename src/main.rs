@@ -8,6 +8,7 @@ mod vault;
 
 use std::path::PathBuf;
 
+use anyhow::bail;
 use clap::Parser;
 use tracing::debug;
 use tracing::error;
@@ -15,6 +16,9 @@ use tracing::info;
 use tracing_subscriber::prelude::*;
 
 use crate::config::Config;
+use crate::vault::models::auth::token::PostRevokeRequest;
+use crate::vault::models::sys::generate_root::PostGenerateRootAttemptRequest;
+use crate::vault::models::sys::generate_root::PostGenerateRootUpdateRequest;
 use crate::vault::models::sys::init::PostInitRequest;
 use crate::vault::models::sys::unseal::PostUnsealRequest;
 use crate::vault::VaultClient;
@@ -130,6 +134,10 @@ async fn main() -> anyhow::Result<()> {
         info!(phase = "unseal", "Vault is already unsealed");
     }
 
+    // Rotate root ------------------------------------------------------------
+
+    rotate_root(&vault, &config).await?;
+
     Ok(())
 }
 
@@ -193,6 +201,76 @@ async fn load_and_unseal(vault: &VaultClient, config: &Config) -> anyhow::Result
     }
 
     Err(anyhow::anyhow!("Unable to completely unseal Vault"))
+}
+
+async fn rotate_root(vault: &VaultClient, config: &Config) -> anyhow::Result<()> {
+    let phase = "rotate_root";
+
+    // TODO: Consider if an in-progress genroot is actually a failure condition or
+    // if it could be resumed Check if generate root is already in progress and
+    // fail if so
+    info!(phase = "rotate_root", "Checking generate root status");
+    let genroot_status = vault.get_generate_root_attempt().await.map_err(|err| {
+        error!(phase, "Failed checking generate root status");
+        err
+    })?;
+    if genroot_status.started {
+        let msg = "Generate root process is already in progress";
+        error!(phase, msg);
+        bail!(msg);
+    }
+    info!(phase, "Generate root process is not in progress");
+
+    // Load init response (containing root token)
+    info!(phase, "Reading init data from save methods");
+    let init_response = config.save_method.load_init_all().await.map_err(|err| {
+        error!(phase, "Failed reading init data from save methods");
+        err
+    })?;
+    info!(phase, "Successfully read init data from save methods");
+
+    // Start generate root process
+    info!(phase, "Starting generate root process");
+    let genroot_start_request = PostGenerateRootAttemptRequest { pgp_key: None };
+    let genroot_start_response = vault
+        .post_generate_root_attempt(&genroot_start_request)
+        .await
+        .map_err(|err| {
+            error!(phase, "Failed starting generate root process");
+            err
+        })?;
+    info!(phase, "Successfully started generate root process");
+
+    let nonce = genroot_start_response.nonce;
+    let otp = genroot_start_response.otp;
+
+    for (i, key) in init_response.keys.iter().enumerate() {
+        info!(phase, "Submitting key #{i}");
+        let genroot_update_request = PostGenerateRootUpdateRequest {
+            key: key.clone(),
+            nonce: nonce.clone(),
+        };
+
+        let Ok(genroot_update_response) = vault.post_generate_root_update(&genroot_update_request).await else {
+            error!(phase, "Failed submitting key #{i}");
+            continue;
+        };
+        if genroot_update_response.complete {
+            info!(phase, "Successfully generated root");
+
+            // FIXME: Save
+
+            // FIXME:
+            info!(phase, "Revoking previous root token");
+            let vault = vault.with_token(init_response.root_token.into());
+            vault.post_auth_token_revoke_self().await?;
+            info!(phase, "Successfully revoked previous root token");
+
+            return Ok(());
+        }
+    }
+
+    Ok(())
 }
 
 fn setup_logging(log_level: &str) -> anyhow::Result<()> {

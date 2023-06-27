@@ -1,5 +1,8 @@
 pub mod models;
 
+use secrecy::ExposeSecret;
+
+use crate::vault::models::auth::token::*;
 use crate::vault::models::sys::generate_root::*;
 use crate::vault::models::sys::init::*;
 use crate::vault::models::sys::seal_status::*;
@@ -21,8 +24,12 @@ impl VaultClient {
         }
     }
 
-    pub fn set_token(&mut self, token: secrecy::SecretString) {
-        self.token = Some(token);
+    pub fn with_token(&self, token: secrecy::SecretString) -> Self {
+        Self {
+            addr: self.addr.clone(),
+            http: self.http.clone(),
+            token: Some(token),
+        }
     }
 
     pub async fn read_init_status(&self) -> anyhow::Result<GetInitResponse> {
@@ -157,5 +164,36 @@ impl VaultClient {
             .await?;
 
         Ok(response)
+    }
+
+    pub async fn post_auth_token_revoke(&self, request: &PostRevokeRequest) -> anyhow::Result<()> {
+        let endpoint = self.addr.join("v1/auth/token/revoke")?;
+
+        self.http
+            .post(endpoint)
+            .header("X-Vault-Token", self.token.clone().unwrap().expose_secret())
+            .json(request)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn post_auth_token_revoke_self(&self) -> anyhow::Result<()> {
+        let endpoint = self.addr.join("v1/auth/token/revoke-self")?;
+
+        self.http
+            .post(endpoint)
+            .header("X-Vault-Token", self.token.clone().unwrap().expose_secret())
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        Ok(())
     }
 }

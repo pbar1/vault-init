@@ -8,12 +8,21 @@ use crate::vault::models::sys::unseal::*;
 pub struct VaultClient {
     pub addr: url::Url,
     pub http: reqwest::Client,
+    token: Option<secrecy::SecretString>,
 }
 
 impl VaultClient {
     pub fn new(addr: url::Url) -> Self {
         let http = reqwest::Client::new();
-        Self { addr, http }
+        Self {
+            addr,
+            http,
+            token: None,
+        }
+    }
+
+    pub fn set_token(&mut self, token: secrecy::SecretString) {
+        self.token = Some(token);
     }
 
     pub async fn read_init_status(&self) -> anyhow::Result<GetInitResponse> {

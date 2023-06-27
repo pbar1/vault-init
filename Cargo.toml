@@ -25,3 +25,4 @@ tokio = { version = "*", default-features = false, features = ["macros", "fs"] }
 data-encoding = "*"
 hcl-rs = "*"
 async-trait = "*"
+secrecy = "*"

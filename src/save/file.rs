@@ -7,7 +7,7 @@ use tracing::warn;
 
 use super::Load;
 use super::Save;
-use crate::vault::models::sys::init::StartInitResponse;
+use crate::vault::models::sys::init::PostInitResponse;
 
 const DEFAULT_PATH: &str = "vault-init.json";
 
@@ -19,7 +19,7 @@ pub struct File {
 
 #[async_trait::async_trait]
 impl Save for File {
-    async fn save_init(&self, data: &StartInitResponse) -> anyhow::Result<()> {
+    async fn save_init(&self, data: &PostInitResponse) -> anyhow::Result<()> {
         debug!(save_method = "file", "Saving init data");
         let path = self.path.clone().unwrap_or(PathBuf::from(DEFAULT_PATH));
 
@@ -46,11 +46,11 @@ impl Save for File {
 
 #[async_trait::async_trait]
 impl Load for File {
-    async fn load_init(&self) -> anyhow::Result<StartInitResponse> {
+    async fn load_init(&self) -> anyhow::Result<PostInitResponse> {
         debug!(save_method = "file", "Loading init data");
         let path = self.path.clone().unwrap_or(PathBuf::from(DEFAULT_PATH));
         let contents = tokio::fs::read(path).await?;
-        let data: StartInitResponse = serde_json::from_slice(&contents)?;
+        let data: PostInitResponse = serde_json::from_slice(&contents)?;
         Ok(data)
     }
 }

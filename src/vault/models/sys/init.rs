@@ -4,12 +4,12 @@ use serde::Serialize;
 use crate::Args;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ReadInitStatusResponse {
+pub struct GetInitResponse {
     pub initialized: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct StartInitRequest {
+pub struct PostInitRequest {
     pub pgp_keys: Option<Vec<String>>,
     pub root_token_pgp_key: Option<String>,
     pub secret_shares: u8,
@@ -20,7 +20,7 @@ pub struct StartInitRequest {
     pub recovery_pgp_keys: Option<Vec<String>>,
 }
 
-impl From<Args> for StartInitRequest {
+impl From<Args> for PostInitRequest {
     fn from(args: Args) -> Self {
         Self {
             pgp_keys: args.pgp_keys,
@@ -38,7 +38,7 @@ impl From<Args> for StartInitRequest {
 /// An object including the (possibly encrypted, if `pgp_keys` was provided)
 /// root keys, base 64 encoded root keys and initial root token
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct StartInitResponse {
+pub struct PostInitResponse {
     pub keys: Vec<String>,
     pub keys_base64: Vec<String>,
     pub root_token: String,

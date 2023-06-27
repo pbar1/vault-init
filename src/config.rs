@@ -5,7 +5,7 @@ use crate::save::File;
 use crate::save::KubeSecret;
 use crate::save::Load;
 use crate::save::Save;
-use crate::vault::models::sys::init::StartInitResponse;
+use crate::vault::models::sys::init::PostInitResponse;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -19,7 +19,7 @@ pub struct SaveMethod {
 }
 
 impl SaveMethod {
-    pub async fn save_init_all(&self, data: &StartInitResponse) -> anyhow::Result<()> {
+    pub async fn save_init_all(&self, data: &PostInitResponse) -> anyhow::Result<()> {
         if let Some(file) = self.file.clone() {
             file.save_init(data).await?;
         }
@@ -30,7 +30,7 @@ impl SaveMethod {
         Ok(())
     }
 
-    pub async fn load_init_all(&self) -> anyhow::Result<StartInitResponse> {
+    pub async fn load_init_all(&self) -> anyhow::Result<PostInitResponse> {
         if let Some(file) = self.file.clone() {
             if let Ok(data) = file.load_init().await {
                 return Ok(data);

@@ -15,7 +15,7 @@ use tracing::info;
 use tracing_subscriber::prelude::*;
 
 use crate::config::Config;
-use crate::vault::models::sys::init::StartInitRequest;
+use crate::vault::models::sys::init::PostInitRequest;
 use crate::vault::models::sys::unseal::UnsealRequest;
 use crate::vault::VaultClient;
 
@@ -135,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn init_and_save(vault: &VaultClient, args: Args, config: &Config) -> anyhow::Result<()> {
     info!(phase = "init", "Performing initialization");
-    let init_request = StartInitRequest::from(args);
+    let init_request = PostInitRequest::from(args);
     let init_response = vault.start_init(&init_request).await.map_err(|err| {
         error!(phase = "init", "Failed performing initialization");
         err

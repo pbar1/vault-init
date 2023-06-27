@@ -12,7 +12,7 @@ use tracing::warn;
 
 use super::Load;
 use super::Save;
-use crate::vault::models::sys::init::StartInitResponse;
+use crate::vault::models::sys::init::PostInitResponse;
 
 const DEFAULT_SECRET_NAME: &str = "vault-init";
 const DEFAULT_SECRET_KEY: &str = "init.json";
@@ -29,7 +29,7 @@ pub struct KubeSecret {
 
 #[async_trait::async_trait]
 impl Save for KubeSecret {
-    async fn save_init(&self, data: &StartInitResponse) -> anyhow::Result<()> {
+    async fn save_init(&self, data: &PostInitResponse) -> anyhow::Result<()> {
         debug!(save_method = "kube_secret", "Saving init data");
 
         // Create K8s client
@@ -83,7 +83,7 @@ impl Save for KubeSecret {
 
 #[async_trait::async_trait]
 impl Load for KubeSecret {
-    async fn load_init(&self) -> anyhow::Result<StartInitResponse> {
+    async fn load_init(&self) -> anyhow::Result<PostInitResponse> {
         debug!(save_method = "kube_secret", "Loading init data");
 
         let client = kube::Client::try_default().await?;
@@ -104,7 +104,7 @@ impl Load for KubeSecret {
 
         let out = String::from_utf8(byte_string.0.clone())?;
 
-        let init_response: StartInitResponse = serde_json::from_str(&out)?;
+        let init_response: PostInitResponse = serde_json::from_str(&out)?;
 
         Ok(init_response)
     }

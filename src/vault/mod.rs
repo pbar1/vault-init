@@ -15,10 +15,10 @@ impl VaultClient {
         Self { addr, http }
     }
 
-    pub async fn read_init_status(&self) -> anyhow::Result<ReadInitStatusResponse> {
+    pub async fn read_init_status(&self) -> anyhow::Result<GetInitResponse> {
         let endpoint = self.addr.join("v1/sys/init")?;
 
-        let response: ReadInitStatusResponse = self
+        let response: GetInitResponse = self
             .http
             .get(endpoint)
             .send()
@@ -30,13 +30,10 @@ impl VaultClient {
         Ok(response)
     }
 
-    pub async fn start_init(
-        &self,
-        request: &StartInitRequest,
-    ) -> anyhow::Result<StartInitResponse> {
+    pub async fn start_init(&self, request: &PostInitRequest) -> anyhow::Result<PostInitResponse> {
         let endpoint = self.addr.join("v1/sys/init")?;
 
-        let response: StartInitResponse = self
+        let response: PostInitResponse = self
             .http
             .post(endpoint)
             .json(request)

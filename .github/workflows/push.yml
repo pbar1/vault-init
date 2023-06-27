@@ -20,7 +20,7 @@ jobs:
         name: pbar1
         authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-    - run: nix build .#defaultPackage.x86_64-linux
+    - run: nix build .#defaultPackage
 
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v2
